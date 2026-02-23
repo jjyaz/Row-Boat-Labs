@@ -14,6 +14,7 @@ import Graph from "./pages/app/Graph";
 import InboxPage from "./pages/app/InboxPage";
 import Meetings from "./pages/app/Meetings";
 import SettingsPage from "./pages/app/SettingsPage";
+import GoogleCallback from "./pages/app/GoogleCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="meetings" element={<Meetings />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
+            <Route path="/auth/callback" element={<GoogleCallback />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

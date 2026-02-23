@@ -4,16 +4,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { CheckCircle, XCircle, ExternalLink, AlertTriangle } from "lucide-react";
+import { CheckCircle, XCircle, ExternalLink, AlertTriangle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const SettingsPage = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const [googleStatus, setGoogleStatus] = useState<string>("disconnected");
   const [googleLastSync, setGoogleLastSync] = useState<string | null>(null);
+  const [googleScopes, setGoogleScopes] = useState<string[]>([]);
   const [openaiKey, setOpenaiKey] = useState("");
   const [openaiSaved, setOpenaiSaved] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -25,25 +27,76 @@ const SettingsPage = () => {
         .eq("provider", "google")
         .maybeSingle();
       if (data) {
-        setGoogleStatus((data as any).status);
-        setGoogleLastSync((data as any).last_sync_at);
+        setGoogleStatus(data.status);
+        setGoogleLastSync(data.last_sync_at);
+        setGoogleScopes(data.scopes || []);
       }
     };
     fetchIntegrations();
   }, [user]);
 
-  const handleConnectGoogle = () => {
-    toast({
-      title: "Google OAuth Setup Required",
-      description:
-        "You need to configure a Google OAuth Client ID first. See the setup guide below.",
-    });
+  const handleConnectGoogle = async () => {
+    if (!session?.access_token) {
+      toast({ title: "Please sign in first", variant: "destructive" });
+      return;
+    }
+
+    setConnecting(true);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/google-auth-url`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            redirect_uri: `${window.location.origin}/auth/callback`,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        toast({
+          title: "Failed to start Google OAuth",
+          description: data.error || "Unknown error",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Redirect to Google consent screen
+      window.location.href = data.url;
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    if (!user) return;
+    await supabase
+      .from("integrations")
+      .update({ status: "disconnected", access_token: null, refresh_token: null })
+      .eq("user_id", user.id)
+      .eq("provider", "google");
+    setGoogleStatus("disconnected");
+    setGoogleScopes([]);
+    setGoogleLastSync(null);
+    toast({ title: "Google disconnected" });
   };
 
   const handleSaveOpenAI = async () => {
-    if (!openaiKey.trim()) return;
-    // Store in integrations as a provider entry
-    if (!user) return;
+    if (!openaiKey.trim() || !user) return;
     await supabase.from("integrations").upsert(
       {
         user_id: user.id,
@@ -55,6 +108,13 @@ const SettingsPage = () => {
     );
     setOpenaiSaved(true);
     toast({ title: "OpenAI key saved" });
+  };
+
+  const scopeLabels: Record<string, string> = {
+    "https://www.googleapis.com/auth/gmail.readonly": "Gmail (read)",
+    "https://www.googleapis.com/auth/calendar.readonly": "Calendar (read)",
+    "https://www.googleapis.com/auth/drive.metadata.readonly": "Drive metadata",
+    "https://www.googleapis.com/auth/drive.readonly": "Drive (read)",
   };
 
   return (
@@ -80,19 +140,43 @@ const SettingsPage = () => {
           <CardContent className="space-y-4">
             <div className="text-sm text-muted-foreground">
               {googleStatus === "connected" ? (
-                <p>
-                  Connected. Last sync:{" "}
-                  {googleLastSync
-                    ? new Date(googleLastSync).toLocaleString()
-                    : "Never"}
-                </p>
+                <div className="space-y-2">
+                  <p>
+                    Connected. Last sync:{" "}
+                    {googleLastSync
+                      ? new Date(googleLastSync).toLocaleString()
+                      : "Never"}
+                  </p>
+                  {googleScopes.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {googleScopes.map((s) => (
+                        <span key={s} className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                          {scopeLabels[s] || s}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p>Not connected. Gmail, Calendar & Drive access requires Google OAuth.</p>
               )}
             </div>
-            <Button onClick={handleConnectGoogle} variant={googleStatus === "connected" ? "outline" : "default"} size="sm">
-              {googleStatus === "connected" ? "Reconnect" : "Connect Google"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleConnectGoogle}
+                variant={googleStatus === "connected" ? "outline" : "default"}
+                size="sm"
+                disabled={connecting}
+              >
+                {connecting && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                {googleStatus === "connected" ? "Reconnect" : "Connect Google"}
+              </Button>
+              {googleStatus === "connected" && (
+                <Button onClick={handleDisconnectGoogle} variant="ghost" size="sm" className="text-destructive">
+                  Disconnect
+                </Button>
+              )}
+            </div>
 
             {/* Setup Guide */}
             <div className="mt-4 p-4 rounded-lg bg-muted/50 border border-border text-sm space-y-2">
@@ -107,7 +191,7 @@ const SettingsPage = () => {
                 <li>Go to Credentials → Create OAuth 2.0 Client ID (Web application)</li>
                 <li>Add authorized redirect URI: <code className="bg-muted px-1 rounded text-foreground">{window.location.origin}/auth/callback</code></li>
                 <li>Copy Client ID and Client Secret</li>
-                <li>Add them as secrets in the app settings (coming soon via edge function)</li>
+                <li>Add them as GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets in your Lovable project settings</li>
               </ol>
               <a
                 href="https://github.com/rowboatlabs/rowboat"
