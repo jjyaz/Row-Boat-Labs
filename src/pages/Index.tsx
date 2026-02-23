@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import heroImage from "@/assets/hero-image.jpg";
 import WaveBackground from "@/components/WaveBackground";
-import { Anchor, FileText, GitBranch, Mail, Shield, Zap } from "lucide-react";
+import { Anchor, FileText, GitBranch, Github, Mail, Shield, Zap } from "lucide-react";
 
 const features = [
   {
@@ -38,6 +38,15 @@ const Index = () => {
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center">
+        <a
+          href="https://github.com/jjyaz/Row-Boat-Labs"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute top-6 right-6 z-20 text-foreground/70 hover:text-foreground transition-colors"
+          aria-label="GitHub Repository"
+        >
+          <Github className="w-7 h-7" />
+        </a>
         <div className="absolute inset-0">
           <img
             src={heroImage}
