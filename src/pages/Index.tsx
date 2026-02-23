@@ -4,6 +4,9 @@ import { motion } from "framer-motion";
 import heroImage from "@/assets/hero-image.jpg";
 import WaveBackground from "@/components/WaveBackground";
 import { Anchor, FileText, GitBranch, Github, Mail, Shield, Zap } from "lucide-react";
+import { toast } from "sonner";
+
+const CA_ADDRESS = "5VWYTwH9izCLCq8vFkXiLabLbAoEPj1HvUdYHkj2pump";
 
 const features = [
   {
@@ -34,19 +37,37 @@ const features = [
 ];
 
 const Index = () => {
+  const handleCopyCA = async () => {
+    try {
+      await navigator.clipboard.writeText(CA_ADDRESS);
+      toast.success("CA copied to clipboard!");
+    } catch {
+      toast.error("Failed to copy");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Hero */}
       <section className="relative min-h-[90vh] flex items-center">
-        <a
-          href="https://github.com/jjyaz/Row-Boat-Labs"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute top-6 right-6 z-20 text-foreground/70 hover:text-foreground transition-colors"
-          aria-label="GitHub Repository"
-        >
-          <Github className="w-7 h-7" />
-        </a>
+        <div className="absolute top-6 right-6 z-20 flex items-center gap-3">
+          <button
+            onClick={handleCopyCA}
+            className="text-foreground/70 hover:text-foreground transition-colors font-mono text-sm font-bold"
+            aria-label="Copy Contract Address"
+          >
+            CA
+          </button>
+          <a
+            href="https://github.com/jjyaz/Row-Boat-Labs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/70 hover:text-foreground transition-colors"
+            aria-label="GitHub Repository"
+          >
+            <Github className="w-7 h-7" />
+          </a>
+        </div>
         <div className="absolute inset-0">
           <img
             src={heroImage}
