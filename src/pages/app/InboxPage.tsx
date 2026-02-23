@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Inbox, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 
 interface Source {
   id: string;
@@ -16,7 +17,8 @@ interface Source {
 }
 
 const InboxPage = () => {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
+  const { toast } = useToast();
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -40,25 +42,33 @@ const InboxPage = () => {
   }, [user]);
 
   const handleSync = async () => {
+    if (!user || !session?.access_token) return;
     setSyncing(true);
-    // Check if Google integration is connected
-    if (!user) return;
-    const { data: integration } = await supabase
-      .from("integrations")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("provider", "google")
-      .maybeSingle();
-
-    if (!integration || integration.status !== "connected") {
-      alert("Please connect Google in Settings first.");
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/google-sync`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ types: ["email"] }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        toast({ title: "Sync failed", description: data.error, variant: "destructive" });
+      } else {
+        toast({ title: "Sync complete", description: `${data.items_processed} emails ingested` });
+        fetchSources();
+      }
+    } catch (err: any) {
+      toast({ title: "Sync error", description: err.message, variant: "destructive" });
+    } finally {
       setSyncing(false);
-      return;
     }
-
-    // TODO: Call sync edge function
-    alert("Sync triggered. This will be wired to the ingestion pipeline.");
-    setSyncing(false);
   };
 
   return (
